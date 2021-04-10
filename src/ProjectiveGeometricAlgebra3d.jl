@@ -1,5 +1,6 @@
 module ProjectiveGeometricAlgebra3d
 
-# Write your package code here.
+#include("cas.jl")
+include("auto.jl")
 
 end
