@@ -1,0 +1,13 @@
+name = "ProjectiveGeometricAlgebra3d"
+uuid = "af7a74c3-7214-4c9b-ac08-120cc4b5d173"
+authors = ["Jan Weidner <jw3126@gmail.com> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

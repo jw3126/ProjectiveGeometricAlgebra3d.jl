@@ -1,0 +1,3 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+ProjectiveGeometricAlgebra3d = "af7a74c3-7214-4c9b-ac08-120cc4b5d173"
