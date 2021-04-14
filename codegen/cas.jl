@@ -3,6 +3,7 @@ using SymbolicUtils
 using ArgCheck
 using Accessors
 using OffsetArrays
+using SymbolicUtils.Code
 
 ################################################################################
 ##### BasisBlade
@@ -18,6 +19,10 @@ struct BasisBlade
     mask
 end
 
+function check_compatible(b1::BasisBlade, b2::BasisBlade)
+    @argcheck axes(b1.mask) == axes(b2.mask)
+end
+
 function Base.isequal(b1::BasisBlade, b2::BasisBlade)
     isequal(b1.coeff, b2.coeff) && isequal(b1.mask, b2.mask)
 end
@@ -27,16 +32,16 @@ function Base.:(==)(b1::BasisBlade, b2::BasisBlade)
     ==(b1.coeff, b2.coeff) && ==(b1.mask, b2.mask)
 end
 
-function gendim(o::BasisBlade)
-    length(o.mask)
+function genindices(o::BasisBlade)
+    axes(o.mask,1)
 end
 
 function degree(o::BasisBlade)
     sum(o.mask)
 end
 
-function zerobasisblade(gendim)
-    BasisBlade(0, fill(false, gendim))
+function zerobasisblade(r::AbstractUnitRange)
+    BasisBlade(0, fill(false, r))
 end
 
 function Base.:(-)(b::BasisBlade)
@@ -44,10 +49,10 @@ function Base.:(-)(b::BasisBlade)
 end
 
 function count_transpositions(mask1, mask2)
-    @argcheck length(mask1) == length(mask2)
+    @argcheck axes(mask1) == axes(mask2)
     transpositions = 0
     disjoint = true
-    n = length(mask1)
+    n = lastindex(mask1)
     for i in eachindex(mask1, mask2)
         if mask2[i]
             if mask1[i]
@@ -64,22 +69,23 @@ function count_transpositions(mask1, mask2)
 end
 
 function wedge(b1::BasisBlade, b2::BasisBlade)
-    @argcheck gendim(b1) == gendim(b2)
+    @argcheck genindices(b1) == genindices(b2)
     intel = count_transpositions(b1.mask, b2.mask)
     if intel.disjoint
         coeff = (-1)^(intel.transpositions) * b1.coeff * b2.coeff
-        mask = xor.(b1.mask, b2.mask)
+        mask::Mask = map(xor, b1.mask, b2.mask)
         ret = BasisBlade(coeff, mask)
         @check degree(ret) == degree(b1) + degree(b2)
         return ret
     else
-        return zerobasisblade(gendim(b1))
+        return zerobasisblade(genindices(b1))
     end
 end
 
 function geomul(b1::BasisBlade, b2::BasisBlade, metric::AbstractVector)
-    @argcheck gendim(b1) == gendim(b2) == length(metric)
-    mask = Vector{Bool}(undef, gendim(b1))
+    @argcheck axes(b1.mask) == axes(b2.mask) == axes(metric)
+
+    mask = fill(false, genindices(b1))
     coeff = b1.coeff * b2.coeff
     mask1 = b1.mask
     mask2 = b2.mask
@@ -103,7 +109,14 @@ function geomul(b1::BasisBlade, b2::BasisBlade, metric::AbstractVector)
 end
 
 function inner(b1::BasisBlade, b2::BasisBlade, metric)
-    TODO
+    ret = geomul(b1, b2, metric)
+    g1 = degree(b1)
+    g2 = degree(b2)
+    if degree(ret) == abs(g1 - g2)
+        return ret
+    else
+        return zerobasisblade(eachindex(b1.mask))
+    end
 end
 
 function anti_wedge(b1::BasisBlade, b2::BasisBlade)
@@ -117,10 +130,9 @@ end
 
 function dual(b1::BasisBlade)
     # TODO figure out good sign convention for dual
-    N = gendim(b1)
-    @assert gendim(b1) == 4
+    @assert genindices(b1) == 0:3
     d = degree(b1)
-    mask = map((!), b1.mask)
+    mask::Mask = map((!), b1.mask)
     ntrans = if sum(b1.mask) <= sum(mask)
         count_transpositions(b1.mask, mask).transpositions
     else
@@ -147,9 +159,12 @@ end
 ################################################################################
 ##### MultiVector
 ################################################################################
+
+const Mask = OffsetVector{Bool, Vector{Bool}}
+
 struct MultiVector
-    summands::Dict{Vector{Bool}, Any}
-    metric::Union{Vector{Bool}}
+    summands::Dict{Mask, Any}
+    metric::OffsetVector{Float64, Vector{Float64}}
 end
 
 function check_compatible(m1::MultiVector, m2::MultiVector)
@@ -171,7 +186,7 @@ function prunezeros!(m::MultiVector)
 end
 
 function operate_on_basis(f, m::MultiVector)
-    res = Dict{Vector{Bool}, Any}()
+    res = Dict{Mask, Any}()
     for (mask, coeff) in pairs(m.summands)
         b = f(BasisBlade(coeff, mask))
         if haskey(res, b.mask)
@@ -185,7 +200,7 @@ end
 
 function operate_on_basis(f, m1::MultiVector, m2::MultiVector)
     check_compatible(m1, m2)
-    res = Dict{Vector{Bool}, Any}()
+    res = Dict{Mask, Any}()
     for (mask1, coeff1) in pairs(m1.summands)
         for (mask2, coeff2) in pairs(m2.summands)
             b = f(BasisBlade(coeff1, mask1), BasisBlade(coeff2, mask2))
@@ -226,6 +241,12 @@ end
 for op in [:wedge, :anti_wedge]
     @eval $op(m1::MultiVector, m2::MultiVector) = operate_on_basis($op, m1, m2)
 end
+function inner(m1::MultiVector, m2::MultiVector)
+    check_compatible(m1, m2)
+    operate_on_basis(m1, m2) do b1, b2
+        inner(b1, b2, m1.metric)
+    end
+end
 
 function geomul(m1::MultiVector, m2::MultiVector)
     check_compatible(m1, m2)
@@ -250,17 +271,10 @@ end
 
 #operate_on_basis(dual, m)
 
-const METRIC_PGA2D = [1,1,0]
-const METRIC_PGA3D = [1,1,1,0]
-
-function pga2d(args...)
-    b = e(args..., gendim=3)
-    prunezeros!(MultiVector(b, METRIC_PGA2D))
+function Vector0(itr)
+    OffsetArray(itr, (0:length(itr)-1))
 end
-function pga3d(args...)
-    b = e(args..., gendim=4)
-    prunezeros!(MultiVector(b, METRIC_PGA3D))
-end
+const METRIC_PGA3D = Vector0([0.,1,1,1])
 
 function sandwich(x::MultiVector,g::MultiVector)
     rev(g)*x*g
@@ -270,7 +284,7 @@ function Base.show(io::IO, x::MultiVector)
     pieces = String[]
     d = sort(x.summands)
     for (mask, val) in pairs(d)
-        inds = (1:length(mask))[mask]
+        inds = eachindex(mask)[mask]
         push!(pieces, "($val)*e$(inds...)")
     end
     println(io, join(pieces, " + "))
@@ -279,7 +293,6 @@ end
 ################################################################################
 ##### Code gen
 ################################################################################
-using SymbolicUtils.Code
 
 function basisblade_symbol_from_mask(prefix, mask)
     inds = eachindex(mask)[mask]
@@ -287,18 +300,16 @@ function basisblade_symbol_from_mask(prefix, mask)
 end
 basisblade_symbol_from_mask(mask) = basisblade_symbol_from_mask(:e, mask)
 
-basisblade_symbol_from_mask([true, false, false, true])
-
 function sym_getproperty_from_mask(mask)
     ei = basisblade_symbol_from_mask(mask)
     S = SymbolicUtils.Sym{SymbolicUtils.FnType{Tuple{Any},Real}}
-    S(ei)
+    return S(ei)
 end
 
 struct SubAll end
 struct SubEven end
 struct SubDeg{N} end
-SubDeg(N) = SubDeg{N}
+SubDeg(N) = SubDeg{N}()
 struct SubZero end
 
 
@@ -314,17 +325,17 @@ const SUBS = [SubAll(),
 
 function masks_inside(::SubEven)
     ft = (false, true)
-    [[a,b,c,d] for a in ft for b in ft for c in ft for d in ft if iseven(a+b+c+d)]
+    [Vector0([a,b,c,d]) for a in ft for b in ft for c in ft for d in ft if iseven(a+b+c+d)]
 end
 
 function masks_inside(::SubDeg{N}) where {N}
     ft = (false, true)
-    [[a,b,c,d] for a in ft for b in ft for c in ft for d in ft if a+b+c+d == N]
+    [Vector0([a,b,c,d]) for a in ft for b in ft for c in ft for d in ft if a+b+c+d == N]
 end
 
 function masks_inside(::SubAll)
     ft = (false, true)
-    [[a,b,c,d] for a in ft for b in ft for c in ft for d in ft]
+    [Vector0([a,b,c,d]) for a in ft for b in ft for c in ft for d in ft]
 end
 function masks_inside(::SubZero)
     []
@@ -385,9 +396,12 @@ function expr_structdef(sub)
     _eijs= map(masks) do mask
         basisblade_symbol_from_mask("_e", mask)
     end
+    eijsT = map(eijs) do eij
+        :(convert($T, $eij))
+    end
     ctor1 = :(
-              function $MV{$T}($(fields...)) where {$T}
-                  new{$T}($(eijs...))
+              function $MV{$T}($(eijs...)) where {$T}
+                  new{$T}($(eijsT...))
               end
     )
     ctor2 = :(
@@ -407,20 +421,65 @@ function exprs_structdef_batteries(sub)
     masks = masks_inside(sub)
     ret = []
     push!(ret, expr_structdef(sub))
-    if sub isa SubZero
-        return ret
-    end
+    #if sub isa SubZero
+    #    return ret
+    #end
     kws = map(masks) do mask
         eij = basisblade_symbol_from_mask(mask)
         Expr(:kw, eij, 0)
     end
-    kwconstructor = :(
-      function $MV(;$(kws...))
-          return $MV($(map(basisblade_symbol_from_mask, masks)...))
+    if sub != SubZero()
+        kwconstructor = :(
+          function $MV(;$(kws...))
+              return $MV($(map(basisblade_symbol_from_mask, masks)...))
 
-      end
-     )
-    push!(ret, kwconstructor)
+          end
+         )
+        push!(ret, kwconstructor)
+    end
+
+    N = length(masks)
+    tuple_access = [:(t[$i]) for i in 1:N]
+    from_Tuple = :(
+        function $MV(t::NTuple{$N,Any})
+            $MV($(tuple_access...))
+        end
+    )
+    push!(ret, from_Tuple)
+
+    field_accesses = map(masks) do mask
+        eij = basisblade_symbol_from_mask(mask)
+        :(x.$eij)
+    end
+    to_Tuple = :(
+        function Base.Tuple(x::$MV)
+            tuple($(field_accesses...))
+        end
+    )
+    push!(ret, to_Tuple)
+
+    nb = length(masks_inside(sub))
+    def_basislength = :(
+        function basislength(::Type{<:$MV})
+            $nb
+        end
+    )
+    push!(ret, def_basislength)
+    if sub !== SubZero()
+        def_scalartype = :(
+        function scalartype(::Type{$MV{T}}) where {T}
+            T
+        end
+        )
+        push!(ret, def_scalartype)
+        def_ctor = :(
+            function $MV{T}(x::$MV) where {T}
+                $MV{T}($(field_accesses...))
+            end
+        )
+        push!(ret, def_ctor)
+    end
+
     foreach(Base.remove_linenums!, ret)
     ret
 end
@@ -514,7 +573,7 @@ function exprs_everything()
             (wedge, :wedge),
             (sandwich, :sandwich),
             (anti_wedge, :anti_wedge),
-            #(inner, :inner),
+            (inner, :inner),
 
         ]
         for sub1 in SUBS
@@ -524,7 +583,38 @@ function exprs_everything()
             end
         end
     end
+    # conversion
+    for sub in SUBS
+        sub == SubZero() && continue
+        ex = expr_convert(SubAll(), sub)
+        push!(ret, ex)
+    end
+    for sub in SUBS
+        ex = expr_convert(sub, SubZero())
+        push!(ret, ex)
+    end
+    for sub in [SubDeg(0), SubDeg(2), SubDeg(4)]
+        ex = expr_convert(SubEven(), sub)
+        push!(ret, ex)
+    end
     return ret
+end
+
+function expr_convert(sub_big, sub_small)
+    MV_big = symbol_MultiVectorSub(sub_big)
+    MV_small = symbol_MultiVectorSub(sub_small)
+    masks = masks_inside(sub_small)
+    kws = map(masks) do mask
+        eij = basisblade_symbol_from_mask(mask)
+        Expr(:kw, eij, :(x.$eij))
+    end
+    ex = :(
+        function Base.convert(MV::Type{<:$(MV_big)}, x::$MV_small)
+            MV($MV_big(;$(kws...)))
+        end
+    )
+    Base.remove_linenums!(ex)
+    ex
 end
 
 function print_everything(io::IO)
