@@ -8,10 +8,10 @@ export rev, dual
 export ∨, ∧ , wedge, anti_wedge
 export inner
 export norm, normalize
+export polar, ⟂
 
 const ∨ = anti_wedge
 const ∧ = wedge
-
 
 const MultiVector{T} = Union{
                              MultiVector0{T},
@@ -66,6 +66,12 @@ function scalaradd(scalar, v)
     MultiVector0(scalar) + v
 end
 
+const ANTI_ONE = MultiVector4(e0123=1)
+function polar(v::MultiVector)
+    v*ANTI_ONE
+end
+const ⟂ = polar
+
 Base.:*(v1::MultiVector, v2::MultiVector) = geomul(v1,v2)
 Base.:*(s::Number, v::MultiVector) = scalarmul(s,v)
 Base.:*(v::MultiVector, s::Number) = scalarmul(s,v)
@@ -79,6 +85,9 @@ basislength(v::MultiVector) = basislength(typeof(v))
 function LinearAlgebra.norm(v::MultiVector)
     v2 = inner(v,v)::MultiVector0
     sqrt(abs(v2.e))
+end
+function LinearAlgebra.normalize(v::MultiVector)
+    v/norm(v)
 end
 
 function ideal_norm(v::MultiVector)
@@ -134,26 +143,57 @@ end
 ################################################################################
 ##### euclidean
 ################################################################################
-export point, ideal_point
 
-function point(xyz)
-    @argcheck length(xyz) == 3
-    x,y,z = xyz
-    MultiVector3(e023=-x, e013=y, e012=-z, e123=oneunit(x))
+module Euclid
+using ProjectiveGeometricAlgebra3d
+
+function pga end
+struct Point{T}
+    x::T
+    y::T
+    z::T
 end
-function ideal_point(xyz)
-    @argcheck length(xyz) == 3
-    x,y,z = xyz
-    MultiVector3(e023=-x, e013=y, e012=-z)
+
+Point(pt::Point) = pt
+function Point(itr)
+    @argcheck length(itr) == 3
+    x,y,z = itr
+    Point(x,y,z)
 end
-function line_from_to(pt_from, pt_to)
-    point(pt_from) ∨ point(pt_to)
+
+struct Direction{T}
+    x::T
+    y::T
+    z::T
 end
-function line_point_direction(pt, direction)
-    point(pt) ∨ ideal_point(direction)
+Direction(pt::Direction) = pt
+function Direction(itr)
+    @argcheck length(itr) == 3
+    x,y,z = itr
+    Direction(x,y,z)
 end
-function plane_point_directions(pt, dir1, dir2)
-    point(pt) ∨ ideal_point(dir1) ∨ ideal_point(dir2)
+
+struct LinePointDirection{T}
+    point::Point{T}
+    direction::Direction{T}
+end
+struct PlanePointDirections{T}
+    point::Point{T}
+    direction1::Direction{T}
+    direction2::Direction{T}
+end
+
+function pga(pt::Point)
+    MultiVector3(e023=-pt.x, e013=pt.y, e012=-pt.z, e123=oneunit(pt.x))
+end
+function pga(o::Direction)
+    MultiVector3(e023=-o.x, e013=o.y, e012=-o.z)
+end
+function pga(o::LinePointDirection)
+    pga(o.point) ∨ pga(o.direction)
+end
+function pga(o::PlanePointDirections)
+    pga(o.point) ∨ pga(o.direction1) ∨ pga(o.direction2)
 end
 
 end

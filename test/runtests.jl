@@ -77,7 +77,6 @@ z=MultiVectorAll()
     end
 end
 
-
 E0 = point((0,0,0))
 E1 = point((1,0,0))
 E2 = point((0,1,0))
@@ -89,7 +88,11 @@ c1 = randn(3)
 c2 = randn(3)
 @test norm(c1 - c2) ≈ norm(point(c1) ∨ point(c2))
 
-@show (E0 ∨ E1)
-#include("test_cas.jl")
+@testset "angle between planes" begin
+    p_yz = PGA.plane_point_directions(randn(3), [0,0,rand()], (0,rand(),0))
+    p_2  = PGA.plane_point_directions(randn(3), [0,0,rand()], rand()*[1,1,0])
+    @test inner(normalize(p_yz), normalize(p_2)).e ≈ cos(pi/4)
+
+end
 
 #end#module
