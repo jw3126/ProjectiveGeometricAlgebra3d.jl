@@ -1,7 +1,7 @@
 module TestEuclid
 import ProjectiveGeometricAlgebra3d as PGA
 using .PGA.Euclid
-using .PGA.Euclid: pga, norm, join
+using .PGA.Euclid: pga, norm, join, random
 using .PGA: ∨
 using Test
 
@@ -61,6 +61,22 @@ end
     l2 = project(join(E0,E1,E2), l1)
     l3 = join(Point(0,0,0), Point(1,2,0))
     @test l2 ≈ l3
+end
+
+@testset "Motor" begin
+    m = rotator(axis=join(E0, E1), angle=pi/2)
+    @test m(Point(0,0,1)) ≈ Point(0,-1,0)
+
+    for _ in 1:100
+        m1 = random(Motor{Float64})
+        pt1, pt2 = random(Point{Float64}, 2)
+        m1(join(pt1, pt2)) ≈ join(m1(pt1), m1(pt2))
+    end
+    for Geo in [Point{Float32}, Line{Float32}, Plane{Float32}, Motor{Float32}]
+        m1, m2 = random(Motor{Float32}, 2)
+        geo = random(Geo)
+        @test m1(m2(geo)) ≈ (m1∘m2)(geo)
+    end
 end
 
 end#module

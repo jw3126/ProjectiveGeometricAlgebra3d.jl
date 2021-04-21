@@ -90,10 +90,8 @@ function LinearAlgebra.normalize(v::MultiVector)
     v/norm(v)
 end
 
-function norm_ideal(v::MultiVector2)
-    ret = sqrt(v.e01^2 + v.e02^2 + v.e03^2)
-    @argcheck abs(v.e12) + abs(v.e13) + abs(v.e23) < 100eps(ret)
-    ret
+function norm_ideal(v::MultiVector)
+    norm(dual(v))
 end
 
 function normalize_ideal(v::MultiVector)
@@ -140,13 +138,20 @@ function random(rng::AbstractRNG, ::Type{MV}) where {MV <: MultiVector}
     N = basislength(MV)
     return MV(randn(rng, T,N)...)
 end
-
 function random(rng::AbstractRNG, ::Type{MultiVector{T}}) where {T}
     MV = rand(rng,_MultiVectorTypes(T))
-    random(rng, MV)
+    return random(rng, MV)
 end
-function random(MV::Type{<:MultiVector})
-    random(GLOBAL_RNG, MV)
+function random(::Type{T}, args...) where {T}
+    random(GLOBAL_RNG, T, args...)
+end
+function random(rng::AbstractRNG, ::Type{T}, shape::Integer...) where {T}
+    N = length(shape)
+    ret = Array{T,N}(undef, shape)
+    for i in eachindex(ret)
+        ret[i] = random(rng, T)
+    end
+    return ret
 end
 
 include("Euclid.jl")
