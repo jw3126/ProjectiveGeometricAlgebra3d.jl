@@ -28,11 +28,13 @@ E3 = Point(0,0,1)
     @test distance(E3, E2) ≈ sqrt(2)
 end
 
-@test norm(pga(E0) ∨ pga(E1)) ≈ 1
-@test norm(pga(E1) ∨ pga(E2)) ≈ sqrt(2)
-c1 = randn(3)
-c2 = randn(3)
-@test norm(c1 - c2) ≈ norm(pga(Point(c1)) ∨ pga(Point(c2)))
+@testset "norm" begin
+    @test norm(pga(E0) ∨ pga(E1)) ≈ 1
+    @test norm(pga(E1) ∨ pga(E2)) ≈ sqrt(2)
+    c1 = randn(3)
+    c2 = randn(3)
+    @test norm(c1 - c2) ≈ norm(pga(Point(c1)) ∨ pga(Point(c2)))
+end
 
 @testset "angle between planes" begin
     p_yz = Plane(point=randn(3), directions=([0,0,rand()], (0,rand(),0)))
@@ -55,7 +57,10 @@ end
     pt = Point(x,y,z)
     qt = project(join(E0,E1,E2), pt)
     @test qt ≈ Point([x,y,0])
+    l1 = join(Point(0,0,0), Point(1,2,3))
+    l2 = project(join(E0,E1,E2), l1)
+    l3 = join(Point(0,0,0), Point(1,2,0))
+    @test l2 ≈ l3
 end
 
 end#module
-

@@ -90,10 +90,15 @@ function LinearAlgebra.normalize(v::MultiVector)
     v/norm(v)
 end
 
-function ideal_norm(v::MultiVector)
-    TODO
+function norm_ideal(v::MultiVector2)
+    ret = sqrt(v.e01^2 + v.e02^2 + v.e03^2)
+    @argcheck abs(v.e12) + abs(v.e13) + abs(v.e23) < 100eps(ret)
+    ret
 end
 
+function normalize_ideal(v::MultiVector)
+    v / norm_ideal(v)
+end
 function Base.isapprox(v1::MultiVectorZero, v2::MultiVector; kw...)
     true
 end

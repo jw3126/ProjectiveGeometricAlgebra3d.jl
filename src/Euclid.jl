@@ -2,6 +2,7 @@ module Euclid
 import ProjectiveGeometricAlgebra3d as PGA
 using .PGA
 using .PGA: MultiVector3, MultiVector1, MultiVector2, MultiVectorEven, ∨
+using .PGA: normalize, scalartype, normalize_ideal
 using ArgCheck
 
 export Point, Plane, Direction, Line
@@ -11,7 +12,11 @@ function pga end
 
 struct Point{T}
     data::MultiVector3{T}
-    Point(data::MultiVector3{T}) where {T} = new{T}(data)
+    function Point(data::MultiVector3)
+        data1 = normalize(data)
+        T = scalartype(typeof(data1))
+        return new{T}(data1)
+    end
 end
 Point(pt::Point) = pt
 function Point(itr)
@@ -25,7 +30,11 @@ end
 
 struct Direction{T}
     data::MultiVector3{T}
-    Direction(data::MultiVector3{T}) where {T} = new{T}(data)
+    function Direction(data::MultiVector3)
+        data1 = data
+        T = scalartype(typeof(data1))
+        return new{T}(data1)
+    end
 end
 Direction(o::Direction) = o
 function Direction(itr)
@@ -40,7 +49,11 @@ end
 
 struct Line{T}
     data::MultiVector2{T}
-    Line(data::MultiVector2{T}) where {T} = new{T}(data)
+    function Line(data::MultiVector2)
+        data1 = normalize(data)
+        T = scalartype(typeof(data1))
+        return new{T}(data1)
+    end
 end
 Line(o::Line) = o
 function Line(;point=nothing, direction=nothing)
@@ -59,7 +72,11 @@ end
 
 struct Plane{T}
     data::MultiVector1{T}
-    Plane(data::MultiVector1{T}) where {T} = new{T}(data)
+    function Plane(data::MultiVector1)
+        data1 = normalize(data)
+        T = scalartype(typeof(data1))
+        return new{T}(data1)
+    end
 end
 Plane(o::Plane) = o
 function Plane(;point, directions)
@@ -99,17 +116,17 @@ project(onto::Plane, obj::Line) = Line(PGA.project(pga(onto), pga(obj)))
 ##### metric
 ################################################################################
 function cos_angle(o1::Plane, o2::Plane)
-    inner(normalize(pga(o1)), normalize(pga(o2))).e
+    inner(pga(o1), pga(o2)).e
 end
 function cos_angle(o1::Line, o2::Plane)
-    inner(normalize(pga(o1)), normalize(pga(o2))).e
+    inner(pga(o1), pga(o2)).e
 end
 function cos_angle(o1::Plane, o2::Line)
-    inner(normalize(pga(o1)), normalize(pga(o2))).e
+    inner(pga(o1), pga(o2)).e
 end
 
 function distance(o1::Point, o2::Point)
-    norm(normalize(pga(o1)) ∨ normalize(pga(o2)))
+    norm(pga(o1) ∨ pga(o2))
 end
 
 function Base.isapprox(o1::Union{Point, Line, Plane}, o2::Union{Point, Line, Plane}; kw...)
