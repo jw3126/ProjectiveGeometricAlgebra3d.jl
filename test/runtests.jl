@@ -1,5 +1,3 @@
-#module TestProjectiveAlgebra3d
-
 using ProjectiveGeometricAlgebra3d
 using ProjectiveGeometricAlgebra3d: sandwich, MultiVectorEven, MultiVector2, geomul, sandwich, MultiVector3, MultiVectorAll
 const PGA = ProjectiveGeometricAlgebra3d
@@ -77,22 +75,4 @@ z=MultiVectorAll()
     end
 end
 
-E0 = point((0,0,0))
-E1 = point((1,0,0))
-E2 = point((0,1,0))
-E3 = point((0,0,1))
-
-@test norm(E0 ∨ E1) ≈ 1
-@test norm(E1 ∨ E2) ≈ sqrt(2)
-c1 = randn(3)
-c2 = randn(3)
-@test norm(c1 - c2) ≈ norm(point(c1) ∨ point(c2))
-
-@testset "angle between planes" begin
-    p_yz = PGA.plane_point_directions(randn(3), [0,0,rand()], (0,rand(),0))
-    p_2  = PGA.plane_point_directions(randn(3), [0,0,rand()], rand()*[1,1,0])
-    @test inner(normalize(p_yz), normalize(p_2)).e ≈ cos(pi/4)
-
-end
-
-#end#module
+include("test_euclid.jl")

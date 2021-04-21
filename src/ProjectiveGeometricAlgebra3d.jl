@@ -127,73 +127,23 @@ function _MultiVectorTypes(T)
     )
 end
 
+function random(rng::AbstractRNG, ::Type{MultiVectorZero})
+    MultiVectorZero()
+end
+function random(rng::AbstractRNG, ::Type{MV}) where {MV <: MultiVector}
+    T = scalartype(MV)
+    N = basislength(MV)
+    return MV(randn(rng, T,N)...)
+end
+
 function random(rng::AbstractRNG, ::Type{MultiVector{T}}) where {T}
     MV = rand(rng,_MultiVectorTypes(T))
-    N = basislength(MV)
-    if MV === MultiVectorZero
-        MultiVectorZero()
-    else
-        MV(randn(rng, T,N)...)
-    end
+    random(rng, MV)
 end
-function random(MV::Type{MultiVector{T}}) where {T}
+function random(MV::Type{<:MultiVector})
     random(GLOBAL_RNG, MV)
 end
 
-################################################################################
-##### euclidean
-################################################################################
+include("Euclid.jl")
 
-module Euclid
-using ProjectiveGeometricAlgebra3d
-
-function pga end
-struct Point{T}
-    x::T
-    y::T
-    z::T
-end
-
-Point(pt::Point) = pt
-function Point(itr)
-    @argcheck length(itr) == 3
-    x,y,z = itr
-    Point(x,y,z)
-end
-
-struct Direction{T}
-    x::T
-    y::T
-    z::T
-end
-Direction(pt::Direction) = pt
-function Direction(itr)
-    @argcheck length(itr) == 3
-    x,y,z = itr
-    Direction(x,y,z)
-end
-
-struct LinePointDirection{T}
-    point::Point{T}
-    direction::Direction{T}
-end
-struct PlanePointDirections{T}
-    point::Point{T}
-    direction1::Direction{T}
-    direction2::Direction{T}
-end
-
-function pga(pt::Point)
-    MultiVector3(e023=-pt.x, e013=pt.y, e012=-pt.z, e123=oneunit(pt.x))
-end
-function pga(o::Direction)
-    MultiVector3(e023=-o.x, e013=o.y, e012=-o.z)
-end
-function pga(o::LinePointDirection)
-    pga(o.point) ∨ pga(o.direction)
-end
-function pga(o::PlanePointDirections)
-    pga(o.point) ∨ pga(o.direction1) ∨ pga(o.direction2)
-end
-
-end
+end#module

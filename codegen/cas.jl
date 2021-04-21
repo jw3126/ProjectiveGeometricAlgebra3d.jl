@@ -1,4 +1,10 @@
 module CAS
+
+export SubDeg, SubZero, SubAll, SubEven
+export sym_multivector
+
+
+
 using SymbolicUtils
 using ArgCheck
 using Accessors
@@ -174,6 +180,13 @@ end
 const ∧ = wedge
 const ∨ = anti_wedge
 
+function optimize!(m::MultiVector)
+    for (key,val) in pairs(m.summands)
+        m.summands[key] = simplify(val, expand=true)
+    end
+    prunezeros!(m)
+end
+
 function prunezeros!(m::MultiVector)
     filter!(m.summands) do (key, val)
         if val isa Number
@@ -195,7 +208,7 @@ function operate_on_basis(f, m::MultiVector)
             res[b.mask] = b.coeff
         end
     end
-    return prunezeros!(MultiVector(res, m.metric))
+    return optimize!(MultiVector(res, m.metric))
 end
 
 function operate_on_basis(f, m1::MultiVector, m2::MultiVector)
@@ -211,18 +224,18 @@ function operate_on_basis(f, m1::MultiVector, m2::MultiVector)
             end
         end
     end
-    return prunezeros!(MultiVector(res, m1.metric))
+    return optimize!(MultiVector(res, m1.metric))
 end
 
 function MultiVector(b::BasisBlade, metric)
     d = Dict(b.mask => b.coeff)
-    prunezeros!(MultiVector(d, metric))
+    optimize!(MultiVector(d, metric))
 end
 function mergewith_multivectors(f, ms...)
     m1 = first(ms)
     check_compatible(ms...)
     d = mergewith(f, map(m -> m.summands, ms)...)
-    prunezeros!(MultiVector(d, m1.metric))
+    optimize!(MultiVector(d, m1.metric))
 end
 
 for op in [
@@ -253,6 +266,10 @@ function geomul(m1::MultiVector, m2::MultiVector)
     operate_on_basis(m1, m2) do b1, b2
         geomul(b1, b2, m1.metric)
     end
+end
+
+function project(onto::MultiVector, obj::MultiVector)
+    geomul(inner(obj, onto), onto)
 end
 
 function Base.:(*)(m1::MultiVector, m2::MultiVector)
@@ -581,6 +598,13 @@ function exprs_everything()
                 ex = expr_fundef(op, opsym, :x => sub1, :y => sub2)
                 push!(ret, ex)
             end
+        end
+    end
+    GRADE_SUBS = [SubDeg(0), SubDeg(1), SubDeg(2), SubDeg(3), SubDeg(4)]
+    for sub1 in GRADE_SUBS
+        for sub2 in GRADE_SUBS
+            ex = expr_fundef(project, :project, :onto=>sub1, :obj => sub2)
+            push!(ret, ex)
         end
     end
     # conversion
